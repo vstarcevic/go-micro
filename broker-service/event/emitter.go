@@ -1,0 +1,64 @@
+package event
+
+import (
+	"log"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+type Emitter struct {
+	connection *amqp.Connection
+}
+
+func (e *Emitter) setup() error {
+	channel, err := e.connection.Channel()
+	if err != nil {
+		return err
+	}
+	defer channel.Close()
+
+	return declareExchange(channel)
+}
+
+func (e *Emitter) Push(event string, severity string) error {
+	channel, err := e.connection.Channel()
+	if err != nil {
+		return err
+	}
+	defer channel.Close()
+
+	log.Println("Pushing to channel")
+
+	err = channel.Publish(
+		"logs_topic",
+		severity,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(event),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// NewEventEmitter just
+// creates unique channel to write to
+func NewEventEmitter(con *amqp.Connection) (Emitter, error) {
+	emitter := Emitter{
+		connection: con,
+	}
+
+	err := emitter.setup()
+	if err != nil {
+		return Emitter{}, err
+	}
+
+	return emitter, nil
+
+}
