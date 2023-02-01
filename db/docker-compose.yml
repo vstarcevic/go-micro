@@ -18,7 +18,6 @@ services:
       default:
         aliases:
           - postgres
-
   mongo:
     image: 'mongo:4.2.16-bionic'
     ports: 
@@ -47,3 +46,13 @@ services:
       replicas: 1
     volumes:
       - ./db-data/rabbitmq/:/var/lib/rabbitmq/
+  
+  redis: 
+    image: 'redis:7.0.8'
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    volumes:
+      - ./db-data/redis/:/data
+
+

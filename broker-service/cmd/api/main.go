@@ -9,12 +9,14 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/redis/go-redis/v9"
 )
 
 const webPort = "8080"
 
 type Config struct {
 	Rabbit *amqp.Connection
+	Redis  *redis.Client
 }
 
 func main() {
@@ -28,8 +30,15 @@ func main() {
 
 	defer rabbitConn.Close()
 
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
 	app := Config{
 		Rabbit: rabbitConn,
+		Redis:  rdb,
 	}
 
 	log.Printf("Starting broker service on port %s\n", webPort)
