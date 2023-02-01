@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,21 +11,23 @@ import (
 )
 
 var ctx = context.Background()
-var maxCountPerMinute = 5
+
+const maxCount = 5
+const expiration = 10
 
 func RateLimiterMiddleware(redis *redis.Client) func(http.Handler) http.Handler {
 	f := func(h http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == "GET" || r.Method == "POST" {
-				ip := GetRealIP(r)
+			ip := GetRealIP(r)
+			if userBlocked(redis, ip) {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.Header().Set("X-Content-Type-Options", "nosniff")
+				w.WriteHeader(http.StatusTooManyRequests)
+				fmt.Fprint(w, "Too many attempts")
 
-				if !userCanMakeRequest(redis, ip) {
-					//w.Header().Add("HeyHeyHey", "HeyHeyHey2") // NOTE THIS LINE
-					http.Error(w, "Too many attempts slow down", http.StatusForbidden)
-				} else {
-					h.ServeHTTP(w, r)
-					return
-				}
+			} else {
+				h.ServeHTTP(w, r)
+				return
 			}
 		}
 		return http.HandlerFunc(fn)
@@ -43,18 +46,7 @@ func GetRealIP(r *http.Request) string {
 	return IPAddress
 }
 
-func getRedisKey(rdb *redis.Client, key string) (int, error) {
-
-	val, err := rdb.Get(ctx, key).Result()
-	if err != nil {
-		return 0, err
-	}
-
-	return strconv.Atoi(val)
-
-}
-
-func userCanMakeRequest(rdb *redis.Client, key string) bool {
+func userBlocked(rdb *redis.Client, key string) bool {
 
 	val, err := rdb.Get(ctx, key).Result()
 	if err != nil {
@@ -66,15 +58,15 @@ func userCanMakeRequest(rdb *redis.Client, key string) bool {
 		panic(err)
 	}
 
-	if currentRequests > maxCountPerMinute {
-		return false
+	if currentRequests > maxCount {
+		return true
 	} else {
 		rdb.Incr(ctx, key)
 		ttl := rdb.TTL(ctx, key)
-		if ttl.Val().Seconds() != -1 {
-			rdb.Expire(ctx, key, 10*time.Second)
+		if ttl.Val() == -1 {
+			rdb.Expire(ctx, key, expiration*time.Second)
 		}
-		return true
+		return false
 
 	}
 

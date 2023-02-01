@@ -36,6 +36,8 @@ func main() {
 		DB:       0,
 	})
 
+	defer rdb.Close()
+
 	app := Config{
 		Rabbit: rabbitConn,
 		Redis:  rdb,
